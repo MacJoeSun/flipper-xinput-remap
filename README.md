@@ -5,7 +5,13 @@ It also contains a full implementation of XInput for the Flipper Zero that suppo
 ## How to use it?
 Connect your Flipper Zero to a computer, or any other device that supports XInput. **This app likely doesn't work on Xbox consoles.**
 
-From there, open the app and it should connect automatically. The D-Pad acts as your left joystick, the center button is A and the back button is B. Holding the back button by itself will close the app, but using other inputs with the back button won't. **Closing the app will reboot your Flipper.**
+From there, open the app and it should connect automatically. By default the D-Pad acts as your left joystick, the center button is A and the back button is B. Holding the back button by itself will close the app, but using other inputs with the back button won't. **Closing the app will reboot your Flipper.**
+
+### Choosing a button profile
+Hold the OK button to toggle between the available profiles:
+
+* **Joystick** (default): D-Pad drives the left joystick, OK is A, Back is B.
+* **Buttons:** D-Pad directions press Y/A/X/B respectively, OK presses Start, and Back presses the Xbox Back button.
 
 ## Special Thanks
 

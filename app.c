@@ -504,64 +504,228 @@ static void hid_init(usbd_device* dev, FuriHalUsbInterface* intf, void* ctx) {
 
 char* message;
 
-static void app_draw_callback(Canvas* canvas, void* ctx) {
-	UNUSED(ctx);
+typedef enum {
+    ProfileStick,
+    ProfileButtons,
+    ProfileCount,
+} Profile;
 
-	canvas_clear(canvas);
-	canvas_set_color(canvas, ColorBlack);
-	canvas_set_font(canvas, FontSecondary);
-	if (!hid_connected) {
-		canvas_set_font(canvas, FontPrimary);
+static Profile current_profile = ProfileStick;
+
+static const char* profile_names[ProfileCount] = {
+    [ProfileStick] = "Joystick",
+    [ProfileButtons] = "Buttons",
+};
+
+static void reset_surface_state(void) {
+    current_surface.buttons = 0;
+    current_surface.left_x = 0;
+    current_surface.left_y = 0;
+}
+
+static void cycle_profile(void) {
+    current_profile = (current_profile + 1) % ProfileCount;
+    reset_surface_state();
+}
+
+static void handle_press(InputKey key) {
+    switch(current_profile) {
+    case ProfileStick:
+        switch (key) {
+        case InputKeyLeft:
+            current_surface.left_x = -32767;
+            break;
+        case InputKeyRight:
+            current_surface.left_x = 32767;
+            break;
+        case InputKeyOk:
+            current_surface.buttons = current_surface.buttons | A;
+            break;
+        case InputKeyUp:
+            current_surface.left_y = 32767;
+            break;
+        case InputKeyDown:
+            current_surface.left_y = -32767;
+            break;
+        case InputKeyBack:
+            current_surface.buttons = current_surface.buttons | B;
+            break;
+        default:
+            break;
+        }
+        break;
+    case ProfileButtons:
+        switch (key) {
+        case InputKeyLeft:
+            current_surface.buttons = current_surface.buttons | X;
+            break;
+        case InputKeyRight:
+            current_surface.buttons = current_surface.buttons | B;
+            break;
+        case InputKeyOk:
+            current_surface.buttons = current_surface.buttons | START;
+            break;
+        case InputKeyUp:
+            current_surface.buttons = current_surface.buttons | Y;
+            break;
+        case InputKeyDown:
+            current_surface.buttons = current_surface.buttons | A;
+            break;
+        case InputKeyBack:
+            current_surface.buttons = current_surface.buttons | BACK;
+            break;
+        default:
+            break;
+        }
+        break;
+    case ProfileCount:
+        break;
+    }
+}
+
+static void handle_release(InputKey key) {
+    switch(current_profile) {
+    case ProfileStick:
+        switch (key) {
+        case InputKeyLeft:
+        case InputKeyRight:
+            current_surface.left_x = 0;
+            break;
+        case InputKeyOk:
+            current_surface.buttons = current_surface.buttons & ~A;
+            break;
+        case InputKeyBack:
+            current_surface.buttons = current_surface.buttons & ~B;
+            break;
+        case InputKeyUp:
+        case InputKeyDown:
+            current_surface.left_y = 0;
+            break;
+        default:
+            break;
+        }
+        break;
+    case ProfileButtons:
+        switch (key) {
+        case InputKeyLeft:
+            current_surface.buttons = current_surface.buttons & ~X;
+            break;
+        case InputKeyRight:
+            current_surface.buttons = current_surface.buttons & ~B;
+            break;
+        case InputKeyOk:
+            current_surface.buttons = current_surface.buttons & ~START;
+            break;
+        case InputKeyUp:
+            current_surface.buttons = current_surface.buttons & ~Y;
+            break;
+        case InputKeyDown:
+            current_surface.buttons = current_surface.buttons & ~A;
+            break;
+        case InputKeyBack:
+            current_surface.buttons = current_surface.buttons & ~BACK;
+            break;
+        default:
+            break;
+        }
+        break;
+    case ProfileCount:
+        break;
+    }
+}
+
+static void draw_profile_header(Canvas* canvas) {
+    canvas_set_font(canvas, FontSecondary);
+    canvas_draw_str(canvas, 4, 12, "Profile:");
+    canvas_draw_str(canvas, 50, 12, profile_names[current_profile]);
+    canvas_draw_str(canvas, 90, 12, "Hold OK");
+    canvas_draw_str(canvas, 90, 22, "to switch");
+}
+
+static void app_draw_callback(Canvas* canvas, void* ctx) {
+        UNUSED(ctx);
+
+        canvas_clear(canvas);
+        canvas_set_color(canvas, ColorBlack);
+        canvas_set_font(canvas, FontSecondary);
+        if (!hid_connected) {
+                canvas_set_font(canvas, FontPrimary);
         canvas_draw_str(canvas, 60, 35, "Connecting...");
         canvas_draw_icon(canvas, 5, 20, &I_usb);
-	} else {
+        } else {
+        draw_profile_header(canvas);
         canvas_set_font(canvas, FontPrimary);
-        canvas_draw_str(canvas, 74, 12, "Controller");
+        canvas_draw_str(canvas, 60, 32, "Controller");
         canvas_set_font(canvas, FontSecondary);
-        canvas_draw_str(canvas, 64, 24, "Hold");
-        canvas_draw_icon(canvas, 84, 16, &I_back);
-        canvas_draw_str(canvas, 97, 24, "to exit");
+        canvas_draw_str(canvas, 64, 44, "Hold");
+        canvas_draw_icon(canvas, 84, 36, &I_back);
+        canvas_draw_str(canvas, 97, 44, "to exit");
 
-        // Joystick up
-        if (current_surface.left_y > 200) {
-            canvas_draw_icon(canvas, 26, 13, &I_up_held);
-        } else {
-            canvas_draw_icon(canvas, 26, 13, &I_up);
-        }
+        if(current_profile == ProfileStick) {
+            // Joystick up
+            if (current_surface.left_y > 200) {
+                canvas_draw_icon(canvas, 26, 33, &I_up_held);
+            } else {
+                canvas_draw_icon(canvas, 26, 33, &I_up);
+            }
 
-        // Joystick down
-        if (current_surface.left_y < -200) {
-            canvas_draw_icon(canvas, 26, 36, &I_down_held);
-        } else {
-            canvas_draw_icon(canvas, 26, 36, &I_down);
-        }
+            // Joystick down
+            if (current_surface.left_y < -200) {
+                canvas_draw_icon(canvas, 26, 56, &I_down_held);
+            } else {
+                canvas_draw_icon(canvas, 26, 56, &I_down);
+            }
 
-        // Joystick left
-        if (current_surface.left_x < -200) {
-            canvas_draw_icon(canvas, 3, 33, &I_left_held);
-        } else {
-            canvas_draw_icon(canvas, 3, 33, &I_left);
-        }
+            // Joystick left
+            if (current_surface.left_x < -200) {
+                canvas_draw_icon(canvas, 3, 53, &I_left_held);
+            } else {
+                canvas_draw_icon(canvas, 3, 53, &I_left);
+            }
 
-        // Joystick right
-        if (current_surface.left_x > 200) {
-            canvas_draw_icon(canvas, 52, 33, &I_right_held);
-        } else {
-            canvas_draw_icon(canvas, 52, 33, &I_right);
-        }
+            // Joystick right
+            if (current_surface.left_x > 200) {
+                canvas_draw_icon(canvas, 52, 53, &I_right_held);
+            } else {
+                canvas_draw_icon(canvas, 52, 53, &I_right);
+            }
 
-        // A
-        if (current_surface.buttons & A) {
-            canvas_draw_icon(canvas, 79, 40, &I_a_held);
-        } else {
-            canvas_draw_icon(canvas, 79, 40, &I_a);
-        }
+            // A
+            if (current_surface.buttons & A) {
+                canvas_draw_icon(canvas, 79, 60, &I_a_held);
+            } else {
+                canvas_draw_icon(canvas, 79, 60, &I_a);
+            }
 
-        // B
-        if (current_surface.buttons & B) {
-            canvas_draw_icon(canvas, 100, 40, &I_b_held);
+            // B
+            if (current_surface.buttons & B) {
+                canvas_draw_icon(canvas, 100, 60, &I_b_held);
+            } else {
+                canvas_draw_icon(canvas, 100, 60, &I_b);
+            }
         } else {
-            canvas_draw_icon(canvas, 100, 40, &I_b);
+            char buffer[32];
+            const bool up_held = current_surface.buttons & Y;
+            const bool down_held = current_surface.buttons & A;
+            const bool left_held = current_surface.buttons & X;
+            const bool right_held = current_surface.buttons & B;
+            const bool ok_held = current_surface.buttons & START;
+            const bool back_held = current_surface.buttons & BACK;
+
+            canvas_draw_str(canvas, 4, 34, "Button remap:");
+
+            snprintf(buffer, sizeof(buffer), "Up -> Y%s", up_held ? "*" : "");
+            canvas_draw_str(canvas, 4, 44, buffer);
+            snprintf(buffer, sizeof(buffer), "Down -> A%s", down_held ? "*" : "");
+            canvas_draw_str(canvas, 4, 54, buffer);
+            snprintf(buffer, sizeof(buffer), "Left -> X%s", left_held ? "*" : "");
+            canvas_draw_str(canvas, 70, 44, buffer);
+            snprintf(buffer, sizeof(buffer), "Right -> B%s", right_held ? "*" : "");
+            canvas_draw_str(canvas, 70, 54, buffer);
+            snprintf(buffer, sizeof(buffer), "OK -> Start%s", ok_held ? "*" : "");
+            canvas_draw_str(canvas, 4, 64, buffer);
+            snprintf(buffer, sizeof(buffer), "Back -> Back%s", back_held ? "*" : "");
+            canvas_draw_str(canvas, 70, 64, buffer);
         }
     }
 }
@@ -597,60 +761,25 @@ int32_t xinput_app(void* p) {
 		if (!running) {
 			break;
 		}
-		message = strdup(input_get_type_name(input_event.type));
-        if (input_event.type == InputTypeLong && input_event.key == InputKeyBack && current_surface.buttons == B) {
-            running = false;
-        }
+                message = strdup(input_get_type_name(input_event.type));
 
-		if (input_event.type == InputTypeRepeat) {
-			// No
-		} else if (input_event.type == InputTypePress) {
-			switch (input_event.key) {
-			case InputKeyLeft:
-				current_surface.left_x = -32767;
-				break;
-			case InputKeyRight:
-				current_surface.left_x = 32767;
-				break;
-			case InputKeyOk:
-				current_surface.buttons = current_surface.buttons | A;
-				break;
-			case InputKeyUp:
-				current_surface.left_y = 32767;
-				break;
-			case InputKeyDown:
-				current_surface.left_y = -32767;
-				break;
-            case InputKeyBack:
-                current_surface.buttons = current_surface.buttons | B;
-			default:
-				break;
-			}
-		}
-		if (input_event.type == InputTypeRelease) {
-			switch (input_event.key) {
-			case InputKeyLeft:
-			case InputKeyRight:
-				current_surface.left_x = 0;
-				break;
-			case InputKeyOk:
-				// current_surface.buttons = current_surface.buttons | THE_VOID_ONE;
-                current_surface.buttons = current_surface.buttons & ~ A;
-				break;
-            case InputKeyBack:
-                current_surface.buttons = current_surface.buttons & ~ B;
-                break;
-			case InputKeyUp:
-			case InputKeyDown:
-				current_surface.left_y = 0;
-				break;
-			default:
-				break;
-			}
-		}
-		view_port_update(view_port);
+                if (input_event.type == InputTypeLong && input_event.key == InputKeyBack) {
+            if ((current_profile == ProfileStick && current_surface.buttons == B) ||
+                (current_profile == ProfileButtons && current_surface.buttons == BACK)) {
+                running = false;
+            }
+                } else if (input_event.type == InputTypeLong && input_event.key == InputKeyOk) {
+                        cycle_profile();
+                } else if (input_event.type == InputTypeRepeat) {
+                        // No
+                } else if (input_event.type == InputTypePress) {
+                        handle_press(input_event.key);
+                } else if (input_event.type == InputTypeRelease) {
+                        handle_release(input_event.key);
+                }
+                view_port_update(view_port);
         hid_send_report();
-	}
+        }
 	view_port_enabled_set(view_port, false);
 	gui_remove_view_port(gui, view_port);
 	view_port_free(view_port);
